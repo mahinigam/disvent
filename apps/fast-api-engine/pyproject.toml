@@ -1,0 +1,18 @@
+[project]
+name = "fast-api-engine"
+version = "0.1.0"
+description = "FastAPI engine with dual routing to ClickHouse and DuckDB"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "clickhouse-connect>=0.7.0",
+    "duckdb>=0.9.2",
+    "pyarrow>=15.0.0",
+    "pandas>=2.2.0",
+    "pydantic>=2.6.0"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

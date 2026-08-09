@@ -1,0 +1,15 @@
+[project]
+name = "dashboard"
+version = "0.1.0"
+description = "Streamlit UI for real-time monitoring"
+requires-python = ">=3.11"
+dependencies = [
+    "streamlit>=1.31.0",
+    "pandas>=2.2.0",
+    "requests>=2.31.0",
+    "plotly>=5.18.0"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

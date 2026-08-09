@@ -1,0 +1,14 @@
+[project]
+name = "mock-generator"
+version = "0.1.0"
+description = "High-throughput mock transaction generator"
+requires-python = ">=3.11"
+dependencies = [
+    "confluent-kafka>=2.3.0",
+    "faker>=22.5.1",
+    "pydantic>=2.6.0"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

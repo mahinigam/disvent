@@ -1,0 +1,15 @@
+{
+  "namespace": "com.disvent.finance",
+  "type": "record",
+  "name": "Transaction",
+  "fields": [
+    {"name": "transaction_id", "type": "string"},
+    {"name": "user_id", "type": "string"},
+    {"name": "amount", "type": "double"},
+    {"name": "currency", "type": "string", "default": "USD"},
+    {"name": "merchant_id", "type": "string"},
+    {"name": "location", "type": "string"},
+    {"name": "device_fingerprint", "type": "string"},
+    {"name": "timestamp_ms", "type": "long", "logicalType": "timestamp-millis"}
+  ]
+}
