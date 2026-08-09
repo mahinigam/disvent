@@ -43,7 +43,7 @@ services:
       REDPANDA_ADMINAPI_ENABLED: "true"
       REDPANDA_ADMINAPI_URLS: http://redpanda:9644
     ports:
-      - 8080:8080
+      - 8086:8080
     networks:
       - streaming_network
     depends_on:

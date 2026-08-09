@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 import plotly.express as px
 
-API_URL = "http://localhost:8000/api/v1"
+API_URL = "http://localhost:8001/api/v1"
 
 st.set_page_config(page_title="Disvent Dashboard", layout="wide")
 
