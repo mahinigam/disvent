@@ -4,9 +4,7 @@ version = "0.1.0"
 description = "PySpark Structured Streaming fraud detection"
 requires-python = ">=3.11"
 dependencies = [
-    "pyspark>=3.5.0"
+    "pyspark==3.5.3"
 ]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+

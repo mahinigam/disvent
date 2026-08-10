@@ -1,8 +1,6 @@
-version: '3.7'
-
 services:
   redpanda:
-    image: docker.redpanda.com/redpandadata/redpanda:latest
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.5
     container_name: redpanda
     command:
       - redpanda
@@ -11,60 +9,194 @@ services:
       - --advertise-kafka-addr internal://redpanda:29092,external://localhost:9092
       - --pandaproxy-addr internal://0.0.0.0:28082,external://0.0.0.0:8082
       - --advertise-pandaproxy-addr internal://redpanda:28082,external://localhost:8082
-      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:8081
+      - --schema-registry-addr internal://0.0.0.0:28081,external://0.0.0.0:18081
       - --rpc-addr redpanda:33145
       - --advertise-rpc-addr redpanda:33145
       - --mode dev-container
       - --smp 1
       - --memory 1G
+      - --default-log-level=warn
     ports:
-      - 8081:8081
-      - 8082:8082
-      - 9092:9092
-      - 29092:29092
-      - 9644:9644
+      - "18081:18081"
+      - "8082:8082"
+      - "9092:9092"
+      - "29092:29092"
+      - "9644:9644"
     volumes:
       - redpanda-data:/var/lib/redpanda/data
     networks:
       - streaming_network
     healthcheck:
-      test: ["CMD-SHELL", "rpk cluster health"]
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true'"]
       interval: 10s
-      timeout: 3s
-      retries: 5
+      timeout: 5s
+      retries: 12
+
+  topic-init:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.5
+    container_name: topic-init
+    profiles: ["app", "pipeline"]
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "rpk topic create financial-transactions --brokers redpanda:29092 --partitions 12 --replicas 1 || true;
+       rpk topic create fraud-alerts --brokers redpanda:29092 --partitions 3 --replicas 1 || true"
+    networks:
+      - streaming_network
+    depends_on:
+      redpanda:
+        condition: service_healthy
 
   redpanda-console:
-    image: docker.redpanda.com/redpandadata/console:latest
+    image: docker.redpanda.com/redpandadata/console:v2.8.4
     container_name: redpanda-console
     environment:
       KAFKA_BROKERS: redpanda:29092
       KAFKA_SCHEMAREGISTRY_ENABLED: "true"
-      KAFKA_SCHEMAREGISTRY_URLS: http://redpanda:8081
+      KAFKA_SCHEMAREGISTRY_URLS: http://redpanda:18081
       REDPANDA_ADMINAPI_ENABLED: "true"
       REDPANDA_ADMINAPI_URLS: http://redpanda:9644
     ports:
-      - 8086:8080
+      - "8086:8080"
     networks:
       - streaming_network
     depends_on:
-      - redpanda
+      redpanda:
+        condition: service_healthy
 
   clickhouse:
-    image: clickhouse/clickhouse-server:latest
+    image: clickhouse/clickhouse-server:24.12
     container_name: clickhouse
     ports:
-      - 8123:8123
-      - 9000:9000
+      - "8123:8123"
+      - "9000:9000"
     volumes:
       - ./docker/clickhouse-init:/docker-entrypoint-initdb.d
       - clickhouse-data:/var/lib/clickhouse
+    environment:
+      CLICKHOUSE_USER: disvent_user
+      CLICKHOUSE_PASSWORD: disvent_password
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
     networks:
       - streaming_network
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 12
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/fast-api-engine/Dockerfile
+    container_name: disvent-api
+    profiles: ["app", "pipeline"]
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_DATABASE: disvent
+      CLICKHOUSE_USER: disvent_user
+      CLICKHOUSE_PASSWORD: disvent_password
+      PARQUET_DIR: /data/parquet
+      DISVENT_AUTH_ENABLED: ${DISVENT_AUTH_ENABLED:-true}
+      DISVENT_API_KEY: ${DISVENT_API_KEY:-dev-secret-key}
+    ports:
+      - "8001:8001"
+    volumes:
+      - parquet-data:/data/parquet
+    networks:
+      - streaming_network
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+    container_name: disvent-dashboard
+    profiles: ["app", "pipeline"]
+    environment:
+      API_URL: http://api:8001/api/v1
+      DISVENT_API_KEY: ${DISVENT_API_KEY:-}
+    ports:
+      - "8501:8501"
+    networks:
+      - streaming_network
+    depends_on:
+      - api
+
+  generator:
+    build:
+      context: .
+      dockerfile: apps/mock-generator/Dockerfile
+    container_name: disvent-generator
+    profiles: ["pipeline"]
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:29092
+      SCHEMA_REGISTRY_URL: http://redpanda:18081
+      TOPIC_NAME: financial-transactions
+      TARGET_RATE_PER_SEC: ${TARGET_RATE_PER_SEC:-2500}
+      ANOMALY_PROBABILITY: ${ANOMALY_PROBABILITY:-0.035}
+      MAX_MESSAGES: ${MAX_MESSAGES:-0}
+      SCHEMA_PATH: /schemas/transaction.avsc
+    networks:
+      - streaming_network
+    depends_on:
+      topic-init:
+        condition: service_completed_successfully
+
+  streaming-engine:
+    build:
+      context: .
+      dockerfile: apps/streaming-engine/Dockerfile
+    container_name: disvent-streaming-engine
+    profiles: ["pipeline"]
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:29092
+      TOPIC_NAME: financial-transactions
+      ALERTS_TOPIC: fraud-alerts
+      CHECKPOINT_LOCATION: file:///tmp/spark-checkpoints/fraud-alerts
+      RISK_AMOUNT_THRESHOLD: ${RISK_AMOUNT_THRESHOLD:-8000}
+      RISK_COUNT_THRESHOLD: ${RISK_COUNT_THRESHOLD:-5}
+      SCHEMA_PATH: /schemas/transaction.avsc
+    networks:
+      - streaming_network
+    depends_on:
+      topic-init:
+        condition: service_completed_successfully
+
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    container_name: disvent-prometheus
+    profiles: ["observability", "pipeline"]
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - streaming_network
+    depends_on:
+      - api
+      - redpanda
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: disvent-grafana
+    profiles: ["observability", "pipeline"]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    networks:
+      - streaming_network
+    depends_on:
+      - prometheus
 
 networks:
   streaming_network:
@@ -73,3 +205,6 @@ networks:
 volumes:
   redpanda-data:
   clickhouse-data:
+  parquet-data:
+  prometheus-data:
+  grafana-data:

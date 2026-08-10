@@ -14,3 +14,15 @@ clickhouse-data/
 .idea/
 .vscode/
 .DS_Store
+
+# Spark
+spark-warehouse/
+derby.log
+metastore_db/
+
+# IDE
+.vscode/
+.idea/
+
+# Tools
+.ruff_cache/

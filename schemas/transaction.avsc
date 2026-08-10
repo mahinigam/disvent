@@ -9,6 +9,8 @@
     {"name": "currency", "type": "string", "default": "USD"},
     {"name": "merchant_id", "type": "string"},
     {"name": "location", "type": "string"},
+    {"name": "latitude", "type": "double", "default": 0.0},
+    {"name": "longitude", "type": "double", "default": 0.0},
     {"name": "device_fingerprint", "type": "string"},
     {"name": "timestamp_ms", "type": "long", "logicalType": "timestamp-millis"}
   ]

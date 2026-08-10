@@ -1,14 +1,15 @@
 CREATE DATABASE IF NOT EXISTS disvent;
 USE disvent;
 
--- 1. Main transactions table (ReplacingMergeTree for idempotency)
 CREATE TABLE IF NOT EXISTS transactions (
     transaction_id String,
     user_id String,
     amount Float64,
-    currency String DEFAULT 'USD',
-    merchant_id String,
+    currency LowCardinality(String) DEFAULT 'USD',
+    merchant_id LowCardinality(String),
     location String,
+    latitude Float64,
+    longitude Float64,
     device_fingerprint String,
     timestamp_ms Int64,
     event_time DateTime MATERIALIZED toDateTime(timestamp_ms / 1000)
@@ -16,19 +17,17 @@ CREATE TABLE IF NOT EXISTS transactions (
 PARTITION BY toYYYYMMDD(event_time)
 ORDER BY (user_id, event_time, transaction_id);
 
--- 2. Aggregation Table for Merchant Statistics (SummingMergeTree)
 CREATE TABLE IF NOT EXISTS merchant_hourly_stats (
-    merchant_id String,
+    merchant_id LowCardinality(String),
     hour DateTime,
     total_amount Float64,
     transaction_count UInt64
 ) ENGINE = SummingMergeTree()
 ORDER BY (merchant_id, hour);
 
--- 3. Materialized View to feed merchant_hourly_stats
-CREATE MATERIALIZED VIEW IF NOT EXISTS merchant_hourly_mv 
+CREATE MATERIALIZED VIEW IF NOT EXISTS merchant_hourly_mv
 TO merchant_hourly_stats AS
-SELECT 
+SELECT
     merchant_id,
     toStartOfHour(event_time) AS hour,
     sum(amount) AS total_amount,
@@ -36,20 +35,21 @@ SELECT
 FROM transactions
 GROUP BY merchant_id, hour;
 
--- 4. Risk Scores Table (populated by PySpark)
 CREATE TABLE IF NOT EXISTS risk_scores (
     user_id String,
     window_start DateTime,
     window_end DateTime,
     total_amount_60s Float64,
     transaction_count_60s UInt64,
-    is_anomaly UInt8,
+    distinct_devices_60s UInt64,
+    geo_spread_km Float64,
+    risk_score Float64,
+    reason LowCardinality(String),
     calculated_at DateTime DEFAULT now()
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMMDD(window_start)
-ORDER BY (user_id, window_start);
+ORDER BY (user_id, window_start, calculated_at);
 
--- 5. Kafka Consumer Engine Table (Direct Ingestion)
 CREATE TABLE IF NOT EXISTS transactions_kafka (
     transaction_id String,
     user_id String,
@@ -57,16 +57,50 @@ CREATE TABLE IF NOT EXISTS transactions_kafka (
     currency String,
     merchant_id String,
     location String,
+    latitude Float64,
+    longitude Float64,
     device_fingerprint String,
     timestamp_ms Int64
 ) ENGINE = Kafka
 SETTINGS kafka_broker_list = 'redpanda:29092',
          kafka_topic_list = 'financial-transactions',
-         kafka_group_name = 'clickhouse_consumer_group',
+         kafka_group_name = 'clickhouse_transactions_consumer',
          kafka_format = 'AvroConfluent',
-         format_avro_schema_registry_url = 'http://redpanda:8081';
+         format_avro_schema_registry_url = 'http://redpanda:18081',
+         kafka_num_consumers = 2;
 
--- 6. Materialized View to stream from Kafka into the main transactions table
-CREATE MATERIALIZED VIEW IF NOT EXISTS transactions_consumer_mv 
-TO transactions AS 
+CREATE MATERIALIZED VIEW IF NOT EXISTS transactions_consumer_mv
+TO transactions AS
 SELECT * FROM transactions_kafka;
+
+CREATE TABLE IF NOT EXISTS risk_scores_kafka (
+    user_id String,
+    window_start DateTime,
+    window_end DateTime,
+    total_amount_60s Float64,
+    transaction_count_60s UInt64,
+    distinct_devices_60s UInt64,
+    geo_spread_km Float64,
+    risk_score Float64,
+    reason String
+) ENGINE = Kafka
+SETTINGS kafka_broker_list = 'redpanda:29092',
+         kafka_topic_list = 'fraud-alerts',
+         kafka_group_name = 'clickhouse_risk_scores_consumer',
+         kafka_format = 'JSONEachRow',
+         kafka_num_consumers = 1;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS risk_scores_consumer_mv
+TO risk_scores AS
+SELECT
+    user_id,
+    window_start,
+    window_end,
+    total_amount_60s,
+    transaction_count_60s,
+    distinct_devices_60s,
+    geo_spread_km,
+    risk_score,
+    reason,
+    now() AS calculated_at
+FROM risk_scores_kafka;
