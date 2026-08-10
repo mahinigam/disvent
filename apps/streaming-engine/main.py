@@ -54,47 +54,67 @@ def main() -> None:
     )
 
     windowed_df = (
-        parsed_df.withWatermark("event_time", "1 minute")
-        .groupBy(window(col("event_time"), "1 minute", "30 seconds"), col("user_id"))
+        parsed_df.withWatermark("event_time", "10 minutes")
+        .groupBy(window(col("event_time"), "10 minutes", "1 minute"), col("user_id"))
         .agg(
-            expr("sum(amount)").alias("total_amount_60s"),
-            expr("count(transaction_id)").alias("transaction_count_60s"),
-            expr("count(DISTINCT device_fingerprint)").alias("distinct_devices_60s"),
+            expr("sum(amount)").alias("total_amount_10m"),
+            expr("count(transaction_id)").alias("transaction_count_10m"),
+            expr("approx_count_distinct(device_fingerprint)").alias("distinct_devices_10m"),
             expr("max(latitude) - min(latitude)").alias("latitude_spread"),
             expr("max(longitude) - min(longitude)").alias("longitude_spread"),
+            expr("max(amount)").alias("max_single_amount"),
+            expr("max(CAST(event_time AS LONG)) - min(CAST(event_time AS LONG))").alias("time_spread_sec"),
         )
         .withColumn(
             "geo_spread_km",
             expr("sqrt(pow(latitude_spread * 111.0, 2) + pow(longitude_spread * 111.0, 2))"),
         )
+        .withColumn(
+            "velocity_kmh",
+            expr(
+                "CASE WHEN time_spread_sec > 0 THEN geo_spread_km / (time_spread_sec / 3600.0) "
+                "WHEN geo_spread_km > 10 THEN 9999.0 " # Simultaneous distant transactions
+                "ELSE 0.0 END"
+            ),
+        )
+        .withColumn(
+            "is_structuring",
+            expr(
+                "CASE WHEN transaction_count_10m >= 3 AND total_amount_10m >= 9000.0 AND max_single_amount < 10000.0 "
+                "THEN 1 ELSE 0 END"
+            ),
+        )
     )
 
     anomalies_df = (
         windowed_df.filter(
-            (col("total_amount_60s") >= lit(amount_threshold))
-            | (col("transaction_count_60s") >= lit(count_threshold))
-            | (col("distinct_devices_60s") >= lit(device_threshold))
-            | (col("geo_spread_km") >= lit(geo_spread_threshold_km))
+            (col("total_amount_10m") >= lit(amount_threshold))
+            | (col("transaction_count_10m") >= lit(count_threshold))
+            | (col("distinct_devices_10m") >= lit(device_threshold))
+            | (col("velocity_kmh") >= lit(1000.0))  # Impossible travel
+            | (col("is_structuring") == lit(1))
         )
         .withColumn(
             "risk_score",
             expr(
                 f"least(100.0, "
-                f"(total_amount_60s / {amount_threshold}) * 55.0 + "
-                f"(transaction_count_60s / {count_threshold}) * 25.0 + "
-                f"(distinct_devices_60s / {device_threshold}) * 10.0 + "
-                f"(geo_spread_km / {geo_spread_threshold_km}) * 10.0)"
+                f"(total_amount_10m / {amount_threshold}) * 30.0 + "
+                f"(transaction_count_10m / {count_threshold}) * 15.0 + "
+                f"(distinct_devices_10m / {device_threshold}) * 15.0 + "
+                f"is_structuring * 80.0 + "
+                f"(velocity_kmh / 1000.0) * 80.0)"
             ),
         )
         .withColumn(
             "reason",
             expr(
                 f"CASE "
-                f"WHEN geo_spread_km >= {geo_spread_threshold_km} THEN 'geo_impossibility_window' "
-                f"WHEN distinct_devices_60s >= {device_threshold} THEN 'device_fanout' "
-                f"WHEN total_amount_60s >= {amount_threshold} AND transaction_count_60s >= {count_threshold} "
+                f"WHEN velocity_kmh >= 1000.0 THEN 'impossible_travel' "
+                f"WHEN is_structuring == 1 THEN 'structuring_burst' "
+                f"WHEN distinct_devices_10m >= {device_threshold} THEN 'device_fanout' "
+                f"WHEN total_amount_10m >= {amount_threshold} AND transaction_count_10m >= {count_threshold} "
                 f"THEN 'high_amount_and_velocity' "
-                f"WHEN total_amount_60s >= {amount_threshold} THEN 'high_amount_velocity' "
+                f"WHEN total_amount_10m >= {amount_threshold} THEN 'high_amount' "
                 f"ELSE 'high_transaction_velocity' END"
             ),
         )
@@ -107,9 +127,9 @@ def main() -> None:
                 col("user_id"),
                 col("window.start").alias("window_start"),
                 col("window.end").alias("window_end"),
-                col("total_amount_60s"),
-                col("transaction_count_60s"),
-                col("distinct_devices_60s"),
+                col("total_amount_10m").alias("total_amount_60s"),
+                col("transaction_count_10m").alias("transaction_count_60s"),
+                col("distinct_devices_10m").alias("distinct_devices_60s"),
                 col("geo_spread_km"),
                 col("risk_score"),
                 col("reason"),

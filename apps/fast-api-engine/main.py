@@ -56,14 +56,46 @@ class ThroughputMetrics(BaseModel):
 
 settings = Settings()
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, Gauge, generate_latest
+import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
+
 REQUEST_COUNT = Counter("disvent_api_requests_total", "Total API requests.", ["method", "path", "status"])
 REQUEST_LATENCY = Histogram("disvent_api_request_duration_seconds", "API request latency.", ["method", "path"])
+
+PIPELINE_TX_TOTAL = Gauge("disvent_pipeline_transactions_total", "Total transactions ingested into ClickHouse")
+PIPELINE_TX_RATE = Gauge("disvent_pipeline_transactions_last_minute", "Transactions ingested in the last minute")
+PIPELINE_ANOMALIES = Gauge("disvent_pipeline_anomalies_last_hour", "Fraud anomalies detected in the last hour")
 
 app = FastAPI(
     title="Disvent API Engine",
     version="0.2.0",
     description="Dual-route API for real-time ClickHouse analytics and DuckDB historical audits.",
 )
+
+def _fetch_pipeline_metrics():
+    client = clickhouse_client()
+    tx_total = client.query("SELECT count() FROM transactions").result_rows[0][0]
+    tx_rate = client.query("SELECT count() FROM transactions WHERE event_time >= now() - INTERVAL 1 MINUTE").result_rows[0][0]
+    anomalies = client.query("SELECT count() FROM risk_scores WHERE calculated_at >= now() - INTERVAL 1 HOUR").result_rows[0][0]
+    return tx_total, tx_rate, anomalies
+
+async def update_pipeline_metrics():
+    while True:
+        try:
+            tx_total, tx_rate, anomalies = await asyncio.to_thread(_fetch_pipeline_metrics)
+            PIPELINE_TX_TOTAL.set(tx_total)
+            PIPELINE_TX_RATE.set(tx_rate)
+            PIPELINE_ANOMALIES.set(anomalies)
+        except Exception as e:
+            logger.error(f"Failed to update pipeline metrics: {e}")
+        await asyncio.sleep(10)
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(update_pipeline_metrics())
 
 
 @app.middleware("http")
