@@ -117,7 +117,7 @@ services:
     profiles: ["app", "pipeline"]
     environment:
       API_URL: http://api:8001/api/v1
-      DISVENT_API_KEY: ${DISVENT_API_KEY:-}
+      DISVENT_API_KEY: ${DISVENT_API_KEY:?DISVENT_API_KEY is required in .env}
     ports:
       - "8501:8501"
     networks:
