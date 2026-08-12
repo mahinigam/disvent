@@ -55,8 +55,7 @@ def main() -> None:
                     raise e
                     
             client.command(
-                "INSERT INTO schema_migrations (version) VALUES",
-                [[migration.name]]
+                f"INSERT INTO schema_migrations (version) VALUES ('{migration.name}')"
             )
             print(f"Successfully applied: {migration.name}")
         else:
