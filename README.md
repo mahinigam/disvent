@@ -67,7 +67,7 @@ make smoke
 ### 6. Important Interfaces
 
 - **Operations Dashboard (Streamlit)**: [http://localhost:8501](http://localhost:8501)
-- **Grafana Observability**: [http://localhost:3000](http://localhost:3000) *(Default credentials: `admin` / `admin`)*
+- **Grafana Observability**: [http://localhost:3000](http://localhost:3000) *(Credentials configured in `.env`)*
 - **API Swagger Docs**: [http://localhost:8001/docs](http://localhost:8001/docs)
 - **Redpanda Console**: [http://localhost:8086](http://localhost:8086)
 
@@ -78,7 +78,11 @@ Disvent is secured by default. The API layer requires an authentication key for 
 | Variable | Default / Expected | Description |
 | --- | --- | --- |
 | `DISVENT_AUTH_ENABLED` | `true` | Enforces `X-API-Key` headers on all endpoints |
-| `DISVENT_API_KEY` | `dev-secret-key-change-me` | The required key for secure API routes |
+| `DISVENT_API_KEY` | `dev-secret-key-change-me` | The required key for secure API routes and dashboard |
+| `CLICKHOUSE_USER` | `disvent_user` | ClickHouse user name |
+| `CLICKHOUSE_PASSWORD` | `dev_clickhouse_password` | ClickHouse user password |
+| `GRAFANA_ADMIN_USER` | `admin` | Grafana admin user name |
+| `GRAFANA_ADMIN_PASSWORD` | `dev_grafana_password` | Grafana admin password |
 | `KAFKA_BOOTSTRAP_SERVERS` | `redpanda:29092` | Kafka broker address |
 | `TARGET_RATE_PER_SEC` | `2500` | Generator transaction throughput |
 | `RISK_AMOUNT_THRESHOLD` | `8000` | PySpark fraud detection threshold (sum) |
