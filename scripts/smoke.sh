@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ -f .env ]; then
+  export $(cat .env | grep -v '^#' | xargs)
+fi
+
 API_URL="${API_URL:-http://localhost:8001}"
-API_KEY="${DISVENT_API_KEY:-dev-secret-key}"
+API_KEY="${DISVENT_API_KEY:?DISVENT_API_KEY must be set in environment}"
 
 echo "Waiting for API to become ready..."
 max_retries=30

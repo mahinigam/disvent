@@ -1,4 +1,9 @@
-.PHONY: infra-up app-up pipeline-up observability-up infra-down api dashboard generator stream test smoke
+ifneq (,$(wildcard ./.env))
+    include .env
+    export
+endif
+
+.PHONY: infra-up app-up pipeline-up observability-up infra-down api dashboard generator stream test smoke migrate load-test
 
 infra-up:
 	docker compose up -d redpanda redpanda-console clickhouse
@@ -28,8 +33,14 @@ stream:
 	uv run --project apps/streaming-engine python main.py
 
 test:
-	python3 -m py_compile apps/mock-generator/main.py apps/fast-api-engine/main.py apps/streaming-engine/main.py apps/dashboard/main.py
-	python3 -m unittest discover -s tests
+	uv run python -m py_compile apps/mock-generator/main.py apps/fast-api-engine/main.py apps/streaming-engine/main.py apps/dashboard/main.py scripts/migrate.py apps/load-tester/locustfile.py
+	uv run pytest tests/
 
 smoke:
 	bash scripts/smoke.sh
+
+migrate:
+	uv run python scripts/migrate.py
+
+load-test:
+	uv run --project apps/load-tester locust --headless -u 50 -r 10 --run-time 30s

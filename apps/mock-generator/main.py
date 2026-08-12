@@ -37,7 +37,7 @@ CITY_COORDS = {
 @dataclass(frozen=True)
 class Settings:
     kafka_bootstrap_servers: str = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
-    schema_registry_url: str = os.getenv("SCHEMA_REGISTRY_URL", "http://localhost:8087")
+    schema_registry_url: str = os.getenv("SCHEMA_REGISTRY_URL", "http://localhost:18081")
     topic: str = os.getenv("TOPIC_NAME", "financial-transactions")
     target_rate: int = int(os.getenv("TARGET_RATE_PER_SEC", "2500"))
     flush_every: int = int(os.getenv("FLUSH_EVERY", "5000"))

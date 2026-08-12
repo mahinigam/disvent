@@ -26,12 +26,12 @@ class StaticContractTests(unittest.TestCase):
         )
 
     def test_clickhouse_ingests_transactions_and_risk_alerts(self) -> None:
-        sql = (ROOT / "docker" / "clickhouse-init" / "01_init.sql").read_text()
+        sql = (ROOT / "migrations" / "001_initial_schema.sql").read_text()
 
         self.assertIn("ENGINE = Kafka", sql)
         self.assertIn("kafka_topic_list = 'financial-transactions'", sql)
         self.assertIn("kafka_topic_list = 'fraud-alerts'", sql)
-        self.assertIn("format_avro_schema_registry_url = 'http://redpanda:8087'", sql)
+        self.assertIn("format_avro_schema_registry_url = 'http://redpanda:18081'", sql)
         self.assertIn("geo_spread_km Float64", sql)
         self.assertIn("distinct_devices_60s UInt64", sql)
 

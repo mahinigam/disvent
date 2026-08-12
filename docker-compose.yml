@@ -73,8 +73,8 @@ services:
       - ./docker/clickhouse-init:/docker-entrypoint-initdb.d
       - clickhouse-data:/var/lib/clickhouse
     environment:
-      CLICKHOUSE_USER: disvent_user
-      CLICKHOUSE_PASSWORD: disvent_password
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-disvent_user}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required in .env}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
     networks:
       - streaming_network
@@ -94,11 +94,11 @@ services:
       CLICKHOUSE_HOST: clickhouse
       CLICKHOUSE_PORT: "8123"
       CLICKHOUSE_DATABASE: disvent
-      CLICKHOUSE_USER: disvent_user
-      CLICKHOUSE_PASSWORD: disvent_password
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-disvent_user}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required in .env}
       PARQUET_DIR: /data/parquet
       DISVENT_AUTH_ENABLED: ${DISVENT_AUTH_ENABLED:-true}
-      DISVENT_API_KEY: ${DISVENT_API_KEY:-dev-secret-key}
+      DISVENT_API_KEY: ${DISVENT_API_KEY:?DISVENT_API_KEY is required in .env}
     ports:
       - "8001:8001"
     volumes:
@@ -186,7 +186,7 @@ services:
     profiles: ["observability", "pipeline"]
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required in .env}
     ports:
       - "3000:3000"
     volumes:
