@@ -25,13 +25,13 @@ jobs:
           python-version: "3.11"
           
       - name: Install dependencies
-        run: uv sync
-        
-      - name: Run unit tests
-        run: uv run pytest tests/
+        run: uv sync --all-packages
         
       - name: Set up .env
         run: cp .env.example .env
+
+      - name: Run unit tests
+        run: uv run pytest tests/
 
       - name: Start Docker stack
         run: |
