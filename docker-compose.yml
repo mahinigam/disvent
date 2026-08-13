@@ -156,11 +156,11 @@ services:
       TOPIC_NAME: financial-transactions
       ALERTS_TOPIC: fraud-alerts
       CHECKPOINT_LOCATION: file:///tmp/spark-checkpoints/fraud-alerts
-    volumes:
-      - spark-checkpoints:/tmp/spark-checkpoints
       RISK_AMOUNT_THRESHOLD: ${RISK_AMOUNT_THRESHOLD:-8000}
       RISK_COUNT_THRESHOLD: ${RISK_COUNT_THRESHOLD:-5}
       SCHEMA_PATH: /schemas/transaction.avsc
+    volumes:
+      - spark-checkpoints:/tmp/spark-checkpoints
     networks:
       - streaming_network
     depends_on:
