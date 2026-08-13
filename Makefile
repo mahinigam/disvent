@@ -49,4 +49,4 @@ load-test:
 	export $$(grep -v '^#' .env | xargs) && uv run locust -f apps/load-tester/locustfile.py --host=http://localhost:8001
 
 stress-test:
-	export $$(grep -v '^#' .env | xargs) && uv run locust -f apps/load-tester/locustfile.py --host=http://localhost:8001 --users 500 --spawn-rate 50
+	export $$(grep -v '^#' .env | xargs) && uv run locust -f apps/load-tester/locustfile.py --host=http://localhost:8001 --users 500 --spawn-rate 50 --headless --run-time 60s

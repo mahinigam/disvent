@@ -9,7 +9,7 @@ echo "containers to test PySpark checkpointing and pipeline resilience."
 echo "Press Ctrl+C to stop."
 echo ""
 
-TARGETS=("disvent-redpanda-1" "disvent-clickhouse-1" "disvent-streaming-engine")
+TARGETS=("redpanda" "clickhouse" "disvent-streaming-engine")
 
 while true; do
   SLEEP_TIME=$((RANDOM % 20 + 10))
