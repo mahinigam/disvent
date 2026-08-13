@@ -53,9 +53,31 @@ class TransactionFactory:
 
     def make(self) -> dict[str, Any]:
         is_anomaly = random.random() < self.anomaly_probability
-        user_id = random.choice(self.hot_users if is_anomaly else USER_IDS)
-        amount = self._amount(is_anomaly)
-        location, latitude, longitude = self._location(is_anomaly)
+        
+        if is_anomaly:
+            scenario = random.choice(["botnet", "structuring", "high_amount"])
+            user_id = random.choice(self.hot_users)
+            
+            if scenario == "botnet":
+                # Botnet: Rapid small transactions from wildly different locations & devices
+                amount = round(random.uniform(10.0, 50.0), 2)
+                location, latitude, longitude = self._location(is_anomaly=True)
+                device_fingerprint = uuid.uuid4().hex[:16] # New device every time
+            elif scenario == "structuring":
+                # Micro-structuring: Amounts just under the $8000 threshold
+                amount = round(random.uniform(7950.0, 7999.0), 2)
+                location, latitude, longitude = self._location(is_anomaly=False)
+                device_fingerprint = f"device_{user_id[-4:]}" # Same device for the user
+            else:
+                # High amount: Obvious large single transaction
+                amount = round(random.uniform(8500.0, 9500.0), 2)
+                location, latitude, longitude = self._location(is_anomaly=False)
+                device_fingerprint = f"device_{user_id[-4:]}"
+        else:
+            user_id = random.choice(USER_IDS)
+            amount = round(random.lognormvariate(4.0, 1.0), 2)
+            location, latitude, longitude = self._location(is_anomaly=False)
+            device_fingerprint = uuid.uuid4().hex[:16]
 
         return {
             "transaction_id": str(uuid.uuid4()),
@@ -66,15 +88,9 @@ class TransactionFactory:
             "location": location,
             "latitude": latitude,
             "longitude": longitude,
-            "device_fingerprint": uuid.uuid4().hex[:16],
+            "device_fingerprint": device_fingerprint,
             "timestamp_ms": int(time.time() * 1000),
         }
-
-    @staticmethod
-    def _amount(is_anomaly: bool) -> float:
-        if is_anomaly:
-            return round(random.uniform(2_500.0, 9_500.0), 2)
-        return round(random.lognormvariate(4.0, 1.0), 2)
 
     def _location(self, is_anomaly: bool) -> tuple[str, float, float]:
         if is_anomaly:

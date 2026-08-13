@@ -39,8 +39,14 @@ test:
 smoke:
 	bash scripts/smoke.sh
 
+chaos:
+	bash scripts/chaos.sh
+
 migrate:
 	uv run python scripts/migrate.py
 
 load-test:
-	uv run --project apps/load-tester locust --headless -u 50 -r 10 --run-time 30s
+	export $$(grep -v '^#' .env | xargs) && uv run locust -f apps/load-tester/locustfile.py --host=http://localhost:8001
+
+stress-test:
+	export $$(grep -v '^#' .env | xargs) && uv run locust -f apps/load-tester/locustfile.py --host=http://localhost:8001 --users 500 --spawn-rate 50
